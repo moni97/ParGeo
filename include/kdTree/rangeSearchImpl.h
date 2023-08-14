@@ -26,6 +26,7 @@
 #include "parlay/sequence.h"
 #include "kdTree.h"
 #include "pargeo/point.h"
+#include <random>
 
 namespace pargeo::kdTree
 {
@@ -172,8 +173,24 @@ namespace pargeo::kdTree
       auto tmp = query[i] - halfLen;
       qMin[i] = tmp;
       qMax[i] = tmp + halfLen * 2;
-    }
+    }  
     orthRangeHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
+  }
+
+  template <int dim, typename objT, typename F>
+  void orthogonalSampleTraverse(node<dim, objT> *tree,
+                               objT query,
+                               double halfLen,
+                               F func)
+  {
+    point<dim> qMin, qMax;
+    for (size_t i = 0; i < dim; i++)
+    {
+      auto tmp = query[i] - halfLen;
+      qMin[i] = tmp;
+      qMax[i] = tmp + halfLen * 2;
+    }
+    orthSampleHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
   }
 
   template <int dim, typename objT>
@@ -186,6 +203,95 @@ namespace pargeo::kdTree
     { output.push_back(p); };
     orthogonalRangeTraverse(tree, query, halfLen, collect);
     return output;
+  }
+
+  template <int dim, typename objT>
+  int orthogonalRangeSearchCount(node<dim, objT> *tree,
+                                                 objT query,
+                                                 double halfLen)
+  {
+    size_t pointCount = 0;
+    auto collect = [&](objT *p)
+    {
+        ++pointCount;
+    };
+    orthogonalRangeTraverse(tree, query, halfLen, collect);
+    return pointCount;
+  }
+
+  /* Sampling in a range */
+
+  template <int dim, typename objT>
+  node<dim, objT>* orthogonalRangeSample(node<dim, objT> *tree,
+                                                 objT query,
+                                                 double halfLen)
+  {
+    // Create a distribution (for example, uniform integer distribution)
+    node<dim, objT>* sampleNodePtr = nullptr;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    auto collect = [&](node<dim, objT>* n) {
+        if (sampleNodePtr == nullptr) {
+            sampleNodePtr = n;  // Store the value if not already stored
+        } else {
+          int totalSize = sampleNodePtr->size() + n->size();
+          std::uniform_int_distribution<int> distribution(1, totalSize);
+          int rndNum = distribution(gen);
+          if (rndNum > sampleNodePtr->size()) {
+            sampleNodePtr = n;
+          }
+        }
+    };
+    orthogonalSampleTraverse(tree, query, halfLen, collect);
+    return sampleNodePtr;
+  }
+
+  template <int dim, typename nodeT, typename objT, typename F>
+  void orthSampleHelper(nodeT *tree, point<dim> qMin, point<dim> qMax,
+                       F func)
+  {
+    int relation = tree->boxCompare(qMin, qMax, tree->getMin(), tree->getMax());
+    
+    if (relation == tree->boxExclude)
+    {
+      return;
+    }
+    else if (relation == tree->boxInclude)
+    {
+      
+      func(tree);
+    }
+    else
+    { // intersect
+      if (tree->isLeaf())
+      {
+        parlay::sequence<objT *> output;
+        nodeT newNode;
+        for (size_t i = 0; i < tree->size(); ++i)
+        {
+          objT *p = tree->getItem(i);
+          objT _p = *p;
+          bool in = true;
+          for (int d = 0; d < dim; ++d)
+          {
+            if (_p[d] > qMax[d] || _p[d] < qMin[d])
+              in = false;
+          }
+          if(in) {
+            output.push_back(p);
+          }
+        }
+        newNode = nodeT();
+        newNode.items = parlay::make_slice(output);
+        func(&newNode);
+      }
+      else
+      {
+        orthSampleHelper<dim, nodeT, objT>(tree->L(), qMin, qMax, func);
+        orthSampleHelper<dim, nodeT, objT>(tree->R(), qMin, qMax, func);
+      }
+    }
   }
 
   template <int dim, typename objT>

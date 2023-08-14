@@ -80,6 +80,12 @@ namespace pargeo::kdTree
       objT query,
       double halfLen);
 
+  template <int dim, typename objT>
+  int orthogonalRangeSearchCount(
+    node<dim, objT> *tree,
+      objT query,
+      double halfLen);
+
   template <int dim, typename objT, typename F>
   void orthogonalRangeTraverse(
       node<dim, objT> *tree,
@@ -209,7 +215,7 @@ namespace pargeo::kdTree
     nodeT *sib;
 
     parlay::slice<_objT **, _objT **> items;
-
+    
     inline void minCoords(pointT &_pMin, pointT &p)
     {
       for (int i = 0; i < dim; ++i)

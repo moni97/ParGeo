@@ -40,3 +40,6 @@ build/
 # Benchmark files
 *.json
 *.png
+
+# mac files
+*.DS_Store

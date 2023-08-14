@@ -11,11 +11,17 @@ target_link_libraries(graphGenerator
 add_executable(kNearestNeighbor kNearestNeighbor.cpp)
 target_link_libraries(kNearestNeighbor pargeoLib)
 
+add_executable(experimenting experimenting.cpp)
+target_link_libraries(experimenting pargeoLib)
+
 add_executable(bichromaticClosestPair bichromaticClosestPair.cpp)
 target_link_libraries(bichromaticClosestPair pargeoLib)
 
 add_executable(rangeSearch rangeSearch.cpp)
 target_link_libraries(rangeSearch pargeoLib)
+
+add_executable(rangeSearchSampling rangeSearchSampling.cpp)
+target_link_libraries(rangeSearchSampling pargeoLib)
 
 add_executable(dynamicKdTreeKNN dynamicKdTreeKNN.cpp)
 target_link_libraries(dynamicKdTreeKNN pargeoLib)
@@ -49,3 +55,4 @@ target_link_libraries(smallestEnclosingBall pargeoLib
   # welzlSebLib
   # scanSebLib
   )
+  

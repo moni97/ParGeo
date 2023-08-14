@@ -12,13 +12,16 @@ int main(int argc, char* argv[]) {
 
   /* Parameters */
 
-  static const int dim = 2; // Data set dimensionality
+  static const int dim = 2;
+  size_t n = 10;
 
-  size_t n = 1000; // Number of data points
+  /* Random number initializer */
 
   std::random_device rd;
   std::mt19937 gen(rd());
 
+  /* Data generator */
+  
   auto P = pargeo::uniformInPolyPoints<dim, pargeo::point<dim>>(n, 0, 1.0);
   pargeo::pointIO::writePointsToFile(P, "output.txt");
 
@@ -27,18 +30,11 @@ int main(int argc, char* argv[]) {
   pargeo::kdTree::node<dim, pargeo::point<dim>>* tree =
     pargeo::kdTree::build<dim, pargeo::point<dim>>(P, true);
 
-  /* Spherical range query example
-     surrounding P[0] with radius 0.1 */
-
-   parlay::sequence<pargeo::point<dim>*> elems1 =
-     pargeo::kdTree::rangeSearch(tree, P[0], 0.1);
-
   /* Rectangular range query example
      surrounding P[0] with half-length 0.1 */
 
   /* Orthogonal Range Search */
-
-  std::cout << "\nOrthogonal Range Search wiht 0.1\n";
+  std::cout << "\nOrthogonal Range Search\n";
 
   parlay::sequence<pargeo::point<dim>*> elems2 =
     pargeo::kdTree::orthogonalRangeSearch(tree, P[0], 0.1);
@@ -53,20 +49,17 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
     }
 
-  std::cout << "\nOrthogonal Range Count";
+  /* Orthogonal Range Count */
+  std::cout << "\nOrthogonal Range Count\n";
 
   size_t count1 =
     pargeo::kdTree::orthogonalRangeSearchCount(tree, P[0], 0.1);
 
-  // size_t count2 =
-  //   pargeo::kdTree::orthogonalRangeSearchCount(tree, P[0], 0.5);
-
-  // size_t count3 =
-  //   pargeo::kdTree::orthogonalRangeSearchCount(tree, P[0], 0.8);
-  std::cout << "\nNo of points with 0.1: " << count1;
-  //  << "\nNo of points with 0.5: " << count2 << "\nNo of points with 0.8: " << count3 << std::endl;
+  std::cout << count1 << std::endl;
 
   /* Orthogonal range sample*/
+  std::cout << "\nOrthogonal Range Sample\n";
+
   pargeo::kdTree::node<dim, pargeo::point<dim>>* sampleNode =  pargeo::kdTree::orthogonalRangeSample(tree, P[0], 0.1);
 
   if (sampleNode->size() > 1) {
@@ -75,7 +68,12 @@ int main(int argc, char* argv[]) {
     pargeo::point<dim>* samplePoint = sampleNode->getItem(sampleIndex);
     std::cout << "\nsample point: " << *samplePoint;
   } else {
-    std::cout << "\nsample point with leafsize 1: " << *sampleNode->getItem(1);
+    int i;
+    std::cout << sampleNode->size() << std::endl;
+    for(i = 0; i < sampleNode->size(); ++i) {
+        std::cout << *sampleNode->getItem(i) << std::endl;
+    }
+    std::cout << "\nsample point with leafsize 1: " << *sampleNode->getItem(0);
   }
 
   pargeo::kdTree::del(tree);
