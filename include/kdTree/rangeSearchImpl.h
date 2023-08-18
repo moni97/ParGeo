@@ -27,6 +27,8 @@
 #include "kdTree.h"
 #include "pargeo/point.h"
 #include <random>
+#include <cstdlib>
+#include <stdlib.h>
 
 namespace pargeo::kdTree
 {
@@ -173,24 +175,8 @@ namespace pargeo::kdTree
       auto tmp = query[i] - halfLen;
       qMin[i] = tmp;
       qMax[i] = tmp + halfLen * 2;
-    }  
-    orthRangeHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
-  }
-
-  template <int dim, typename objT, typename F>
-  void orthogonalSampleTraverse(node<dim, objT> *tree,
-                               objT query,
-                               double halfLen,
-                               F func)
-  {
-    point<dim> qMin, qMax;
-    for (size_t i = 0; i < dim; i++)
-    {
-      auto tmp = query[i] - halfLen;
-      qMin[i] = tmp;
-      qMax[i] = tmp + halfLen * 2;
     }
-    orthSampleHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
+    orthRangeHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
   }
 
   template <int dim, typename objT>
@@ -221,30 +207,62 @@ namespace pargeo::kdTree
 
   /* Sampling in a range */
 
+  template <int dim, typename objT, typename F>
+  void orthogonalSampleTraverse(node<dim, objT> *tree,
+                               objT query,
+                               double halfLen,
+                               F func)
+  {
+    point<dim> qMin, qMax;
+    for (size_t i = 0; i < dim; i++)
+    {
+      auto tmp = query[i] - halfLen;
+      qMin[i] = tmp;
+      qMax[i] = tmp + halfLen * 2;
+    }
+    orthSampleHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
+  }
+
   template <int dim, typename objT>
-  node<dim, objT>* orthogonalRangeSample(node<dim, objT> *tree,
+  objT orthogonalRangeSample(node<dim, objT> *tree,
                                                  objT query,
                                                  double halfLen)
   {
-    // Create a distribution (for example, uniform integer distribution)
-    node<dim, objT>* sampleNodePtr = nullptr;
+    // Create a distribution (for example, uniform integer distribution)  
     std::random_device rd;
     std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
 
+    // Parameters
+    node<dim, objT>* sampleNodePtr = nullptr;
+    double M = -1.0;
+
+    // Weighted random sampling
+
+    // Step 1: Compute the counting query to know the number of points in Q.
+    size_t numPointsInQueryRect = orthogonalRangeSearchCount(tree, query, halfLen);
+    // std::cout << "num of points: " << numPointsInQueryRect << std::endl;
     auto collect = [&](node<dim, objT>* n) {
-        if (sampleNodePtr == nullptr) {
-            sampleNodePtr = n;  // Store the value if not already stored
-        } else {
-          int totalSize = sampleNodePtr->size() + n->size();
-          std::uniform_int_distribution<int> distribution(1, totalSize);
-          int rndNum = distribution(gen);
-          if (rndNum > sampleNodePtr->size()) {
-            sampleNodePtr = n;
-          }
+        double t = dis(gen);
+        double weightOfNode = t * (double(n->size()) / numPointsInQueryRect);
+        // std::cout << "n size: " << n->size() << " t : " << t << " weightOfNode: " << weightOfNode << " n / w: " <<double(n->size()) / numPointsInQueryRect<< std::endl;
+        if (weightOfNode > M) {
+          M = weightOfNode;
+          sampleNodePtr = n;
         }
     };
+
     orthogonalSampleTraverse(tree, query, halfLen, collect);
-    return sampleNodePtr;
+    pargeo::point<dim> samplePoint;
+    if (sampleNodePtr->size() > 1) {
+      std::uniform_int_distribution<int> distribution(1, sampleNodePtr->size());
+      int sampleIndex = distribution(gen);
+      samplePoint = sampleNodePtr->getItem(sampleIndex);
+    } else {
+      samplePoint = sampleNodePtr->getItem(0);
+    }
+
+    return samplePoint;
   }
 
   template <int dim, typename nodeT, typename objT, typename F>
@@ -321,5 +339,51 @@ namespace pargeo::kdTree
                  });
     return out;
   }
+
+  template <int dim, typename objT>
+  double orthogonalRangeEntropy(node<dim, objT> *tree,
+                    objT query,
+                    double halfLen,
+                    node<dim, objT> *treeMap[]) 
+    {
+        /* Parameters for the algorithm */
+
+        int i, 
+          n = 3, 
+          count = orthogonalRangeSearchCount(tree, query, halfLen);
+      
+        double d,
+          delta = 0.1,
+          tou = (delta / n) / (10 * log2(n / delta)),
+          m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
+          
+        /* since m is too large we take the minimum of m and count */
+        
+        m = fmin(count, m);
+
+        double x[int(m)], 
+          sum = 0.0;
+        point<dim> s[int(m)];
+
+        /* print all the values */
+
+        std::cout << "\nn : " << n << "\ndelta : " << delta << "\ntou : " << tou << "\nm : " << m << std::endl;
+        
+        /* Generates m samples, calculate d(si) and x(si) */
+
+        for (i = 0; i < m; ++i) {
+          s[i] = orthogonalRangeSample(tree, query, halfLen);
+          d =  double(orthogonalRangeSearchCount(treeMap[s[i].attribute], query, halfLen)) / count;
+    
+          /* Calculate x(i) */
+          if(d >= tou)
+            x[i] = log(double(1)/d);
+          else
+            x[i] = 0;
+          sum += x[i];
+        }
+
+        return sum / m;
+    }
 
 } // End namespace

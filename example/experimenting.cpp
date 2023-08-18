@@ -6,6 +6,7 @@
 #include "pargeo/getTime.h"
 #include "pargeo/pointIO.h"
 #include "pargeo/parseCommandLine.h"
+#include "dataset/uniform.h"
 
 
 typedef pargeo::kdTree::node<2, pargeo::point<2>> nodeT;
@@ -27,35 +28,23 @@ void inOrderTraversal(nodeT* root) {
 }
 
 int main(int argc, char* argv[]) {
-  pargeo::commandLine P(argc,argv,"[-k <param>] [-o <outFile>] <inFile>\n k = 1 will just return self.");
-  char* iFile = P.getArgument(0);
-  size_t k = P.getOptionIntValue("-k",1);
-  char* oFile = P.getOptionValue("-o");
+  int dim = 2;
+  double coordinates[2] = {2.0, 3.0}; // Coordinates: x=2.0, y=3.0
+  int attributeValue = 42;
+  pargeo::apoint<2> p(coordinates, attributeValue);
+  std::cout << p[0] << p[1] << p.attribute;
 
-  int dim = pargeo::pointIO::readHeader(iFile);
+  // if (dim == 2) {
+    
+  //   // parlay::sequence<pargeo::point<2>> P =
+  //   //   pargeo::pointIO::readPointsFromFile<pargeo::point<2>>(iFile);
 
-  if (dim == 2) {
+  //   int n = 30;
+  //   auto P = pargeo::uniformInPolyPoints<2, pargeo::point<2>>(n, 0, 1.0);
     
-    parlay::sequence<pargeo::point<2>> P =
-      pargeo::pointIO::readPointsFromFile<pargeo::point<2>>(iFile);
+  //   nodeT *tree = pargeo::kdTree::build<2, pargeo::point<2>>(P, true);
+  //   inOrderTraversal(tree);
     
-    nodeT *tree = pargeo::kdTree::build<2, pargeo::point<2>>(P, true);
-    inOrderTraversal(tree);
-    // std::cout << "root node size: " << tree->size() << "\n";
-    // if (tree->L() != 0) {
-    //     nodeT *lefttNode = tree->L();
-    //     std::cout << "Left node size: " << lefttNode->size() << "\n";
-    //     if (lefttNode->L() != 0) {
-    //       std::cout << "Left node size: " << lefttNode->L()->size() << "\n";
-    //     }   
-    // }
-    // if (tree->R() != 0) {
-    //     nodeT *rightNode = tree->L();
-    //     std::cout << "Right node size: " << rightNode->size() << "\n";
-    //     if (rightNode->R() != 0) {
-    //       std::cout << "Right node size: " << rightNode->R()->size() << "\n";
-    //     }
-    // }
-  }
+  // }
 }
 

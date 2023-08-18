@@ -86,12 +86,31 @@ namespace pargeo::kdTree
       objT query,
       double halfLen);
 
+  template <int dim, typename objT>
+  objT orthogonalRangeSample(
+    node<dim, objT> *tree,
+      objT query,
+      double halfLen);
+
+  template <int dim, typename objT, typename F>
+  void orthogonalSampleTraverse(
+    node<dim, objT> *tree,
+    objT query,
+    double halfLen,
+    F func);
+
   template <int dim, typename objT, typename F>
   void orthogonalRangeTraverse(
       node<dim, objT> *tree,
       objT query,
       double halfLen,
       F func);
+
+  template <int dim, typename objT>
+  int orthogonalRangeEntropy(
+    node<dim, objT> *tree,
+    objT query,
+    double halfLen);
 
   /* Bichromatic closest pair */
 
@@ -214,8 +233,7 @@ namespace pargeo::kdTree
 
     nodeT *sib;
 
-    parlay::slice<_objT **, _objT **> items;
-    
+
     inline void minCoords(pointT &_pMin, pointT &p)
     {
       for (int i = 0; i < dim; ++i)
@@ -264,6 +282,8 @@ namespace pargeo::kdTree
 
   public:
     using objT = _objT;
+
+    parlay::slice<_objT **, _objT **> items;
 
     static constexpr int dim = _dim;
 

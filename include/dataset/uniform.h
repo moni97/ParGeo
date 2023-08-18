@@ -9,6 +9,7 @@
 #include "parlay/parallel.h"
 #include "parlay/utilities.h"
 #include "pargeo/point.h"
+#include <random>
 
 namespace pargeo {
   namespace uniformDataGen {
@@ -41,6 +42,21 @@ namespace pargeo {
     }
 
     template<int dim, class pointT>
+    pointT randNdWithAttr(size_t i, size_t attr) {
+			       size_t s[dim];
+			       s[0] = i;
+			       for (int j=1; j<dim; ++j) {
+				 s[j] = j*i + parlay::hash64(s[j-1]);
+			       }
+			       typename pointT::floatT ss[dim];
+			       for (int j=0; j<dim; ++j) {
+				 ss[j] = 2 * randFloat<typename pointT::floatT>(s[j]) - 1;
+			       }
+
+			       return pointT(ss, attr);
+    }
+
+    template<int dim, class pointT>
     pointT randInUnitSphere(size_t i) {
       auto origin = pointT();
       for(int j=0; j<dim; ++j) origin[j] = 0;
@@ -49,6 +65,19 @@ namespace pargeo {
       do {
 	size_t o = parlay::hash64(j++);
 	p = randNd<dim, pointT>(o+i);
+      } while (p.dist(origin) > 1.0);
+      return p;
+    }
+
+    template<int dim, class pointT>
+    pointT randInUnitSphereWithAttr(size_t i, size_t attr) {
+      auto origin = pointT();
+      for(int j=0; j<dim; ++j) origin[j] = 0;
+      size_t j = 0;
+      pointT p;
+      do {
+	size_t o = parlay::hash64(j++);
+	p = randNdWithAttr<dim, pointT>(o+i, attr);
       } while (p.dist(origin) > 1.0);
       return p;
     }
@@ -81,6 +110,40 @@ namespace pargeo {
       });
 
     return P; // data should be already permuted
+  }
+
+  template<int dim, class pointT = point<dim>>
+  parlay::sequence<pointT> uniformInPolyPointsWithAttr(size_t n,
+					       size_t shape,
+                 size_t attrSize,
+					       double scale = -1.0) {
+    using namespace parlay;
+    using namespace uniformDataGen;
+
+    if (scale < 0) scale = n;
+
+    auto P = sequence<pointT>(n);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> distribution(0, attrSize - 1);
+    parallel_for (0, n, [&](size_t i) {
+	if (shape == 0) P[i] = randInUnitSphereWithAttr<dim, pointT>(i, distribution(gen)) * scale;
+	else if (shape == 1) P[i] = randNd<dim, pointT>(i) * scale;
+	else throw std::runtime_error("generator not implemented yet");
+      });
+
+    return P; // data should be already permuted
+  }
+
+template<int dim, class pointT = point<dim>>
+  std::unordered_map<int, parlay::sequence<pargeo::point<dim>>> groupPoints(parlay::sequence<pointT> P, size_t no_of_colors) {
+    using namespace parlay;
+    std::unordered_map<int, parlay::sequence<pargeo::point<dim>>> pointsMap(no_of_colors);
+    int i;
+    for(i = 0; i < P.size() ; ++i) {
+      pointsMap[P[i].attribute].push_back(P[i]);
+    }
+    return pointsMap;
   }
 
   template<int dim, class pointT = point<dim>>
