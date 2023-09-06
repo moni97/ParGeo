@@ -76,8 +76,8 @@ namespace pargeo {
       size_t j = 0;
       pointT p;
       do {
-	size_t o = parlay::hash64(j++);
-	p = randNdWithAttr<dim, pointT>(o+i, attr);
+        size_t o = parlay::hash64(j++);
+        p = randNdWithAttr<dim, pointT>(o+i, attr);
       } while (p.dist(origin) > 1.0);
       return p;
     }

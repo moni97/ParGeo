@@ -29,9 +29,16 @@
 #include <random>
 #include <cstdlib>
 #include <stdlib.h>
+#include <unordered_map>
+#include <stdexcept>
 
 namespace pargeo::kdTree
 {
+  /***********************************/
+  /* Spherical range query functions */
+  /***********************************/
+
+  /********** Range Helper function **********/
 
   template <int dim, typename nodeT, typename objT, typename F>
   void rangeHelper(nodeT *tree, objT &q, point<dim> qMin, point<dim> qMax,
@@ -72,6 +79,8 @@ namespace pargeo::kdTree
     }
   }
 
+  /********** Range Traverse function **********/
+
   template <int dim, typename objT, typename F>
   void rangeTraverse(
       node<dim, objT> *tree,
@@ -90,6 +99,8 @@ namespace pargeo::kdTree
                                             radius, func);
   }
 
+  /********** Range Search function **********/
+
   template <int dim, typename objT>
   parlay::sequence<objT *> rangeSearch(
       node<dim, objT> *tree,
@@ -102,6 +113,8 @@ namespace pargeo::kdTree
     rangeTraverse(tree, query, radius, collect);
     return output;
   }
+
+  /********** Brute Force Range Search function **********/
 
   template <int dim, typename objT>
   parlay::sequence<size_t> bruteforceRange(parlay::sequence<objT> &elems,
@@ -118,6 +131,17 @@ namespace pargeo::kdTree
     return parlay::filter(make_slice(flag), [&](size_t i)
                           { return i < elems.size(); });
   }
+
+  /******************************************/
+  /* End of spherical range query functions */
+  /******************************************/
+
+
+  /************************************/
+  /* Orthogonal range query functions */
+  /************************************/
+
+  /********** Orthogonal Range Helper function **********/
 
   template <int dim, typename nodeT, typename objT, typename F>
   void orthRangeHelper(nodeT *tree, point<dim> qMin, point<dim> qMax,
@@ -163,6 +187,8 @@ namespace pargeo::kdTree
     }
   }
 
+  /********** Orthogonal Range Traverse function **********/
+
   template <int dim, typename objT, typename F>
   void orthogonalRangeTraverse(node<dim, objT> *tree,
                                objT query,
@@ -179,6 +205,8 @@ namespace pargeo::kdTree
     orthRangeHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
   }
 
+  /********** Orthogonal Range Search function **********/
+
   template <int dim, typename objT>
   parlay::sequence<objT *> orthogonalRangeSearch(node<dim, objT> *tree,
                                                  objT query,
@@ -190,6 +218,8 @@ namespace pargeo::kdTree
     orthogonalRangeTraverse(tree, query, halfLen, collect);
     return output;
   }
+
+  /********** Orthogonal Range Search Count function **********/
 
   template <int dim, typename objT>
   int orthogonalRangeSearchCount(node<dim, objT> *tree,
@@ -205,112 +235,7 @@ namespace pargeo::kdTree
     return pointCount;
   }
 
-  /* Sampling in a range */
-
-  template <int dim, typename objT, typename F>
-  void orthogonalSampleTraverse(node<dim, objT> *tree,
-                               objT query,
-                               double halfLen,
-                               F func)
-  {
-    point<dim> qMin, qMax;
-    for (size_t i = 0; i < dim; i++)
-    {
-      auto tmp = query[i] - halfLen;
-      qMin[i] = tmp;
-      qMax[i] = tmp + halfLen * 2;
-    }
-    orthSampleHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
-  }
-
-  template <int dim, typename objT>
-  objT orthogonalRangeSample(node<dim, objT> *tree,
-                                                 objT query,
-                                                 double halfLen)
-  {
-    // Create a distribution (for example, uniform integer distribution)  
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> dis(0.0, 1.0);
-
-    // Parameters
-    node<dim, objT>* sampleNodePtr = nullptr;
-    double M = -1.0;
-
-    // Weighted random sampling
-
-    // Step 1: Compute the counting query to know the number of points in Q.
-    size_t numPointsInQueryRect = orthogonalRangeSearchCount(tree, query, halfLen);
-    // std::cout << "num of points: " << numPointsInQueryRect << std::endl;
-    auto collect = [&](node<dim, objT>* n) {
-        double t = dis(gen);
-        double weightOfNode = t * (double(n->size()) / numPointsInQueryRect);
-        // std::cout << "n size: " << n->size() << " t : " << t << " weightOfNode: " << weightOfNode << " n / w: " <<double(n->size()) / numPointsInQueryRect<< std::endl;
-        if (weightOfNode > M) {
-          M = weightOfNode;
-          sampleNodePtr = n;
-        }
-    };
-
-    orthogonalSampleTraverse(tree, query, halfLen, collect);
-    pargeo::point<dim> samplePoint;
-    if (sampleNodePtr->size() > 1) {
-      std::uniform_int_distribution<int> distribution(1, sampleNodePtr->size());
-      int sampleIndex = distribution(gen);
-      samplePoint = sampleNodePtr->getItem(sampleIndex);
-    } else {
-      samplePoint = sampleNodePtr->getItem(0);
-    }
-
-    return samplePoint;
-  }
-
-  template <int dim, typename nodeT, typename objT, typename F>
-  void orthSampleHelper(nodeT *tree, point<dim> qMin, point<dim> qMax,
-                       F func)
-  {
-    int relation = tree->boxCompare(qMin, qMax, tree->getMin(), tree->getMax());
-    
-    if (relation == tree->boxExclude)
-    {
-      return;
-    }
-    else if (relation == tree->boxInclude)
-    {
-      
-      func(tree);
-    }
-    else
-    { // intersect
-      if (tree->isLeaf())
-      {
-        parlay::sequence<objT *> output;
-        nodeT newNode;
-        for (size_t i = 0; i < tree->size(); ++i)
-        {
-          objT *p = tree->getItem(i);
-          objT _p = *p;
-          bool in = true;
-          for (int d = 0; d < dim; ++d)
-          {
-            if (_p[d] > qMax[d] || _p[d] < qMin[d])
-              in = false;
-          }
-          if(in) {
-            output.push_back(p);
-          }
-        }
-        newNode = nodeT();
-        newNode.items = parlay::make_slice(output);
-        func(&newNode);
-      }
-      else
-      {
-        orthSampleHelper<dim, nodeT, objT>(tree->L(), qMin, qMax, func);
-        orthSampleHelper<dim, nodeT, objT>(tree->R(), qMin, qMax, func);
-      }
-    }
-  }
+  /********** Brute Force Orthogonal Range function **********/
 
   template <int dim, typename objT>
   parlay::sequence<size_t> bruteforceOrthRange(parlay::sequence<objT> &A,
@@ -340,50 +265,280 @@ namespace pargeo::kdTree
     return out;
   }
 
+  /*******************************************/
+  /* End of orthogonal range query functions */
+  /******************************************/
+
+  /*******************************************/
+  /* Orthogonal range sample query functions */
+  /******************************************/
+
+  /********** Orthogonal Range Sampling Helper function **********/
+
+  template <int dim, typename nodeT, typename objT, typename F>
+  void orthSampleHelper(nodeT *tree, point<dim> qMin, point<dim> qMax,
+                       F func)
+  {
+    int relation = tree->boxCompare(qMin, qMax, tree->getMin(), tree->getMax());
+    
+    if (relation == tree->boxExclude)
+    {
+      return;
+    }
+    else if (relation == tree->boxInclude)
+    {
+      parlay::sequence<objT*> seq(tree->items.begin(), tree->items.end());
+      func(seq);
+    }
+    else
+    { // intersect
+      if (tree->isLeaf())
+      {
+        parlay::sequence<objT *> output;
+        nodeT newNode;
+        for (size_t i = 0; i < tree->size(); ++i)
+        {
+          objT *p = tree->getItem(i);
+          objT _p = *p;
+          bool in = true;
+          for (int d = 0; d < dim; ++d)
+          {
+            if (_p[d] > qMax[d] || _p[d] < qMin[d])
+              in = false;
+          }
+          if(in) {
+            output.push_back(p);
+          }
+        }
+        if (output.size() > 0) {
+          func(output);  
+        }
+        // std::cout<<"Partially intersecting Node\n";
+      }
+      else
+      {
+        orthSampleHelper<dim, nodeT, objT>(tree->L(), qMin, qMax, func);
+        orthSampleHelper<dim, nodeT, objT>(tree->R(), qMin, qMax, func);
+      }
+    }
+  }
+
+  /********** Orthogonal Range Sampling Traverse function **********/
+
+  template <int dim, typename objT, typename F>
+  void orthogonalSampleTraverse(node<dim, objT> *tree,
+                               objT query,
+                               double halfLen,
+                               F func)
+  {
+    point<dim> qMin, qMax;
+    for (size_t i = 0; i < dim; i++)
+    {
+      auto tmp = query[i] - halfLen;
+      qMin[i] = tmp;
+      qMax[i] = tmp + halfLen * 2;
+    }
+    orthSampleHelper<dim, node<dim, objT>, objT>(tree, qMin, qMax, func);
+  }
+
+  /********** Orthogonal Range Sampling function **********/
+
+  template <int dim, typename objT>
+  objT orthogonalRangeSample(node<dim, objT> *tree,
+                            objT query,
+                            double halfLen)
+  {
+    // Create a distribution (for example, uniform integer distribution)  
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+    // Parameters
+    parlay::sequence<objT*> sampleSeq;
+    double M = -1.0;
+
+    // Weighted random sampling
+    // Step 1: Compute the counting query to know the number of points in Q.
+    size_t numPointsInQueryRect = orthogonalRangeSearchCount(tree, query, halfLen);
+    auto collect = [&](parlay::sequence<objT*> items) {
+        double t = dis(gen);
+        double weightOfNode = t * (double(items.size()) / numPointsInQueryRect);
+        if (weightOfNode > M) {
+          M = weightOfNode;
+          sampleSeq = items;
+        }
+    };
+
+    orthogonalSampleTraverse(tree, query, halfLen, collect);
+    pargeo::point<dim> samplePoint;
+    if (sampleSeq.size() > 1) {
+      std::uniform_int_distribution<int> distribution(0, sampleSeq.size() - 1);
+      int sampleIndex = distribution(gen);
+      samplePoint = sampleSeq[sampleIndex];
+    } else {
+      samplePoint = sampleSeq[0];
+    }
+    return samplePoint;
+  }
+
+  /***************************************************/
+  /* End of orthogonal range sample query functions */
+  /**************************************************/
+
+  /**************************************/
+  /* Orthogonal range entropy functions */
+  /**************************************/
+  
+  /********** Get canonical nodes function **********/
+
+  template <int dim, typename objT>
+  parlay::sequence<parlay::sequence<objT *>> getCanonicalNodes(node<dim, objT> *tree,
+                            objT query,
+                            double halfLen) {
+    parlay::sequence<parlay::sequence<objT *>> canonicalNodes;
+    auto collect = [&](parlay::sequence<objT*> items) {
+        canonicalNodes.push_back(items);
+    };
+    orthogonalSampleTraverse(tree, query, halfLen, collect);
+    return canonicalNodes;
+  }
+
+  /********** Weight Sampling function **********/
+
+  template <typename objT>
+  parlay::sequence<objT *> weightedSampling(parlay::sequence<parlay::sequence<objT *>> &canonicalNodes, int numPointsInQueryRect) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+    parlay::sequence<objT*> sampleSeq;
+    double M = -1.0;
+    double t = dis(gen);
+    // Iterate through the outer sequence
+    for (const auto& sequence : canonicalNodes) {
+      // Iterate through the inner sequence
+      double weightOfNode = t * (double(sequence.size()) / numPointsInQueryRect);
+      if (weightOfNode > M) {
+        M = weightOfNode;
+        sampleSeq = sequence;
+      }
+    }
+    return sampleSeq;
+  }
+
+  /********** Sample a point from a sequence function **********/
+  template <typename objT>
+  objT samplePointFromSeq(parlay::sequence<objT *> sequence) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    objT samplePoint;
+    if (sequence.size() > 1) {
+      std::uniform_int_distribution<int> distribution(0, sequence.size() - 1);
+      int sampleIndex = distribution(gen);
+      samplePoint = sequence[sampleIndex];
+    } else {
+      samplePoint = sequence[0];
+    }
+    // std::cout << samplePoint << std::endl;
+    return samplePoint;
+  }
+
+  /********** Orthogonal Range Entropy function **********/
+
   template <int dim, typename objT>
   double orthogonalRangeEntropy(node<dim, objT> *tree,
                     objT query,
                     double halfLen,
                     node<dim, objT> *treeMap[]) 
-    {
-        /* Parameters for the algorithm */
+  {
+    /* Parameters for the algorithm */
 
-        int i, 
-          n = 3, 
-          count = orthogonalRangeSearchCount(tree, query, halfLen);
+    int i, 
+      n = 10, 
+      count = orthogonalRangeSearchCount(tree, query, halfLen);
+    std::cout << count << ",";    
+    double d,
+      delta = 0.1,   // if m is large set delta to 0.5
+      tou = (delta / n) / (10 * log2(n / delta)),
+      m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
       
-        double d,
-          delta = 0.1,
-          tou = (delta / n) / (10 * log2(n / delta)),
-          m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
-          
-        /* since m is too large we take the minimum of m and count */
-        
-        m = fmin(count, m);
-
-        double x[int(m)], 
-          sum = 0.0;
-        point<dim> s[int(m)];
-
-        /* print all the values */
-
-        std::cout << "\nn : " << n << "\ndelta : " << delta << "\ntou : " << tou << "\nm : " << m << std::endl;
-        
-        /* Generates m samples, calculate d(si) and x(si) */
-
-        for (i = 0; i < m; ++i) {
-          s[i] = orthogonalRangeSample(tree, query, halfLen);
-          d =  double(orthogonalRangeSearchCount(treeMap[s[i].attribute], query, halfLen)) / count;
+    /* since m is too large we take the minimum of m and count */
+    m = fmin(count, m);
+    m = m / 100;
+    double sum = 0.0,num;
     
-          /* Calculate x(i) */
-          if(d >= tou)
-            x[i] = log(double(1)/d);
-          else
-            x[i] = 0;
-          sum += x[i];
-        }
+    /* Generates m samples, calculate d(si) and x(si) */
+    int m2 = int(m);
+    std::unordered_map<int, int> numOfColorPtsInRange(m2);
 
-        return sum / m;
+    parlay::sequence<parlay::sequence<objT *>> canonicalNodes = getCanonicalNodes(tree, query, halfLen);
+    parlay::sequence<objT *> sampleSeq = weightedSampling(canonicalNodes, count);
+    
+    try {
+      parlay::parallel_for(0, m2, [&](size_t i) {
+        double x, d;
+        objT s = samplePointFromSeq(sampleSeq);
+        if(!numOfColorPtsInRange[s.attribute])
+          numOfColorPtsInRange[s.attribute] = orthogonalRangeSearchCount(treeMap[s.attribute], query, halfLen);
+        
+        d = double(numOfColorPtsInRange[s.attribute]) / count;
+        if(d >= tou)
+          x = log2(double(1)/d);
+        else
+          x = 0;
+
+        sum += x;
+      });
+    } catch (const std::exception& e) {
+      std::cerr << e.what() << std::endl;
     }
+
+    // for (i = 0; i < m2; ++i) {
+    //   s = orthogonalRangeSample(tree, query, halfLen);
+    //   num = double(orthogonalRangeSearchCount(treeMap[s.attribute], query, halfLen));
+    //   d =  num / count;
+    //   /* Calculate x(i) */
+    //   if(d >= tou)
+    //     x = log2(double(1)/d);
+    //   else
+    //     x = 0;
+    //   sum += x;
+    // }
+    return sum / m;
+  }
+
+  /********** Orthogonal Range Entropy Brute Force function **********/
+
+  template <int dim, typename objT>
+  double rangeEntropyBruteForce(node<dim, objT> *tree,
+                  objT query,
+                  double halfLen,
+                  int no_of_points) 
+  {
+    int no_of_groups = 10;
+    parlay::sequence<pargeo::point<dim>*> elems2 =
+        pargeo::kdTree::orthogonalRangeSearch(tree, query, halfLen);
+    
+    std::unordered_map<int, int> groupsToPointsMap(no_of_groups);
+
+    for (pargeo::point<dim>* ptr : elems2) {
+      groupsToPointsMap[ptr->attribute] += 1;
+    }
+
+    int i = 0;
+    double e = 0.0;
+    for(i = 0; i < no_of_groups; ++i) {
+      if(groupsToPointsMap[i] != 0) {
+        double div = double(groupsToPointsMap[i]) / no_of_points;
+        e += div * (log2(div));
+      }
+    }
+    return -1 * e;
+  }
+
+  /*********************************************/
+  /* End of orthogonal range entropy functions */
+  /*********************************************/
 
 } // End namespace

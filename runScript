@@ -1,5 +1,5 @@
 cd build
 cmake ..
-make -j rangeSearchSampling
+make -j rangeEntropyWrite
 cd example
-./rangeSearchSampling
+./rangeEntropyWrite
