@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <unordered_map>
 #include <stdexcept>
+#include <cmath>
 
 namespace pargeo::kdTree
 {
@@ -394,10 +395,12 @@ namespace pargeo::kdTree
   template <int dim, typename objT>
   parlay::sequence<parlay::sequence<objT *>> getCanonicalNodes(node<dim, objT> *tree,
                             objT query,
-                            double halfLen) {
+                            double halfLen,
+                            int &numCanNodes) {
     parlay::sequence<parlay::sequence<objT *>> canonicalNodes;
     auto collect = [&](parlay::sequence<objT*> items) {
         canonicalNodes.push_back(items);
+        ++numCanNodes;
     };
     orthogonalSampleTraverse(tree, query, halfLen, collect);
     return canonicalNodes;
@@ -415,6 +418,7 @@ namespace pargeo::kdTree
     double M = -1.0;
     double t = dis(gen);
     // Iterate through the outer sequence
+    int count=0, canonicalNodesSize = 0;
     for (const auto& sequence : canonicalNodes) {
       // Iterate through the inner sequence
       double weightOfNode = t * (double(sequence.size()) / numPointsInQueryRect);
@@ -422,8 +426,33 @@ namespace pargeo::kdTree
         M = weightOfNode;
         sampleSeq = sequence;
       }
+      canonicalNodesSize += sequence.size();
+      ++count;
     }
     return sampleSeq;
+  }
+
+  /********** Propotional Sampling function **********/
+
+  template <typename objT>
+  parlay::sequence<objT *> propotionalSampling(parlay::sequence<parlay::sequence<objT *>> &canonicalNodes, int numPointsInQueryRect, int m) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    parlay::sequence<objT*> samples;
+    int i; 
+
+    for (const auto& sequence : canonicalNodes) {
+      // Iterate through the inner sequence
+      double proportion = m * (double(sequence.size()) / numPointsInQueryRect);
+      int numOfSamples = ceil(proportion);
+      // std::cout << "seqSize: " << sequence.size() << " numOfSamples: " << numOfSamples << std::endl;
+      std::uniform_int_distribution<int> distribution(0, sequence.size() - 1);
+      for(i = 0; i < numOfSamples; ++i) {
+        samples.push_back(sequence[distribution(gen)]);
+      }  
+    }
+    return samples;
   }
 
   /********** Sample a point from a sequence function **********/
@@ -440,7 +469,6 @@ namespace pargeo::kdTree
     } else {
       samplePoint = sequence[0];
     }
-    // std::cout << samplePoint << std::endl;
     return samplePoint;
   }
 
@@ -450,61 +478,49 @@ namespace pargeo::kdTree
   double orthogonalRangeEntropy(node<dim, objT> *tree,
                     objT query,
                     double halfLen,
-                    node<dim, objT> *treeMap[]) 
+                    node<dim, objT> *treeMap[],
+                    int n,
+                    int &count,
+                    int &numCanNodes) 
   {
     /* Parameters for the algorithm */
 
-    int i, 
-      n = 10, 
-      count = orthogonalRangeSearchCount(tree, query, halfLen);
-    std::cout << count << ",";    
-    double d,
-      delta = 0.1,   // if m is large set delta to 0.5
+    int i;
+    count = orthogonalRangeSearchCount(tree, query, halfLen);
+     
+    double d, x,
+      delta = 0.1,
       tou = (delta / n) / (10 * log2(n / delta)),
       m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
-      
-    /* since m is too large we take the minimum of m and count */
+    
     m = fmin(count, m);
     m = m / 100;
     double sum = 0.0,num;
     
     /* Generates m samples, calculate d(si) and x(si) */
     int m2 = int(m);
-    std::unordered_map<int, int> numOfColorPtsInRange(m2);
+    std::unordered_map<int, int> numOfColorPtsInRange(n);
 
-    parlay::sequence<parlay::sequence<objT *>> canonicalNodes = getCanonicalNodes(tree, query, halfLen);
-    parlay::sequence<objT *> sampleSeq = weightedSampling(canonicalNodes, count);
-    
-    try {
-      parlay::parallel_for(0, m2, [&](size_t i) {
-        double x, d;
-        objT s = samplePointFromSeq(sampleSeq);
-        if(!numOfColorPtsInRange[s.attribute])
-          numOfColorPtsInRange[s.attribute] = orthogonalRangeSearchCount(treeMap[s.attribute], query, halfLen);
-        
-        d = double(numOfColorPtsInRange[s.attribute]) / count;
-        if(d >= tou)
-          x = log2(double(1)/d);
-        else
-          x = 0;
+    parlay::sequence<parlay::sequence<objT *>> canonicalNodes = getCanonicalNodes(tree, query, halfLen, numCanNodes);
 
-        sum += x;
-      });
-    } catch (const std::exception& e) {
-      std::cerr << e.what() << std::endl;
+    objT s;
+    for(i =0; i< n; ++i) {
+      numOfColorPtsInRange[i] = orthogonalRangeSearchCount(treeMap[i], query, halfLen);
     }
 
-    // for (i = 0; i < m2; ++i) {
-    //   s = orthogonalRangeSample(tree, query, halfLen);
-    //   num = double(orthogonalRangeSearchCount(treeMap[s.attribute], query, halfLen));
-    //   d =  num / count;
-    //   /* Calculate x(i) */
-    //   if(d >= tou)
-    //     x = log2(double(1)/d);
-    //   else
-    //     x = 0;
-    //   sum += x;
-    // }
+    parlay::sequence<objT *> sampleSeq = propotionalSampling(canonicalNodes, count, m);
+ 
+    for (i = 0; i < m2; ++i) {
+      s = sampleSeq[i];
+      num = numOfColorPtsInRange[s.attribute];
+      d =  num / count;
+      /* Calculate x(i) */
+      if(d >= tou)
+        x = log2(double(1)/d);
+      else
+        x = 0;
+      sum += x;
+    }
     return sum / m;
   }
 
@@ -519,7 +535,7 @@ namespace pargeo::kdTree
     int no_of_groups = 10;
     parlay::sequence<pargeo::point<dim>*> elems2 =
         pargeo::kdTree::orthogonalRangeSearch(tree, query, halfLen);
-    
+
     std::unordered_map<int, int> groupsToPointsMap(no_of_groups);
 
     for (pargeo::point<dim>* ptr : elems2) {

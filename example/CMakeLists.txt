@@ -14,6 +14,9 @@ target_link_libraries(kNearestNeighbor pargeoLib)
 add_executable(experimenting experimenting.cpp)
 target_link_libraries(experimenting pargeoLib)
 
+add_executable(readData readData.cpp)
+target_link_libraries(readData pargeoLib)
+
 add_executable(bichromaticClosestPair bichromaticClosestPair.cpp)
 target_link_libraries(bichromaticClosestPair pargeoLib)
 
@@ -22,9 +25,6 @@ target_link_libraries(rangeSearch pargeoLib)
 
 add_executable(rangeSearchSampling rangeSearchSampling.cpp)
 target_link_libraries(rangeSearchSampling pargeoLib)
-
-add_executable(rangeEntropyWrite rangeEntropyWrite.cpp)
-target_link_libraries(rangeEntropyWrite pargeoLib)
 
 add_executable(rangeEntropyTesting rangeEntropyTesting.cpp)
 target_link_libraries(rangeEntropyTesting pargeoLib)

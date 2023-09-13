@@ -9,6 +9,9 @@
 #include "pargeo/parseCommandLine.h"
 #include <cstdlib>
 #include <unordered_map>
+#include <fstream>
+#include <sstream>
+#include <chrono>
 
 int main(int argc, char* argv[]) {
 
@@ -17,89 +20,63 @@ int main(int argc, char* argv[]) {
   static const int dim = 2;
   size_t n = 100000;
   pargeo::point<dim> queryPoint;
-  size_t queryRadius;
-  size_t no_of_colors = 5;
+  size_t no_of_colors = 10;
   int colors[no_of_colors], i, j;
   pargeo::kdTree::node<dim, pargeo::point<dim>>* treeMap[no_of_colors+1];
-  
-  /* Random number initializer */
+  std::ofstream outputFile ("../test/datasets/output.txt");
 
+  /* Random number initializer */
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> distribution(0, no_of_colors-1);
 
   /* Data generator */
-  /* uniformInPolyPointsWithAttr => generates points with additional attribute */
-  
   auto P = pargeo::uniformInPolyPointsWithAttr<dim, pargeo::point<dim>>(n, 0, no_of_colors, 1.0);
-  std::cout << "Points created\n";
-  /* Group the points based on the color */
   
+  /* Group the points based on the color */
   std::unordered_map<int, parlay::sequence<pargeo::point<dim>>> colorMap = pargeo::groupPoints<dim, pargeo::point<dim>>(P, no_of_colors);
-  std::cout <<colorMap.size() << std::endl;
-  std::cout << "Points grouped\n";
-  std::cout << colorMap[2].size() << std::endl;
-  /* Create separate tree for each color */
 
+  /* Create separate tree for each color */
   for(i = 0; i < no_of_colors; ++i) {
     auto p = colorMap[i];
-    std::cout<<"color " << i << " : " << p.size() << std::endl;
     treeMap[i] = pargeo::kdTree::build<dim, pargeo::point<dim>>(p, true);
-    std::cout << "build successfully\n";
    }
-  std::cout << "TreeMap created\n";
-  /* Query Parameters */ 
   
+  /* Query Parameters */ 
   queryPoint = P[8];
-  queryRadius = 1.0;
   
   /* Build a tree */
-
   pargeo::kdTree::node<dim, pargeo::point<dim>>* tree =
     pargeo::kdTree::build<dim, pargeo::point<dim>>(P, true);
-  std::cout << "Tree created\n";
-
-  /* Rectangular range query example
-     surrounding P[0] with half-length 1.0 */
-
-  /* Orthogonal Range Search */
-  // std::cout << "\nOrthogonal Range Search\n";
-
-  // parlay::sequence<pargeo::point<dim>*> elems2 =
-  //   pargeo::kdTree::orthogonalRangeSearch(tree, queryPoint, queryRadius);
-  
-  /* Prints all the sample points */
-  // j = 0;
-  // for (pargeo::point<dim>* ptr : elems2) {
-  //       std::cout << "Sample point " << j << ": ";
-  //       for (int i = 0; i < dim; ++i) {
-  //           std::cout << (*ptr)[i];
-  //           if (i < dim - 1) {
-  //               std::cout << ", ";
-  //           }
-  //       }
-  //       ++j;
-  //       std::cout << std::endl;
-  //   }
-
-  /* Orthogonal Range Count */
-  // std::cout << "\nOrthogonal Range Count\n";
-
-  // size_t count =
-  //   pargeo::kdTree::orthogonalRangeSearchCount(tree, queryPoint, queryRadius);
-
-  // std::cout << count << std::endl;
-
-  /* Orthogonal range sample*/
-
-  std::cout << "\nOrthogonal Range Sample\n";
-  pargeo::point<dim> samplPoint = pargeo::kdTree::orthogonalRangeSample(tree, queryPoint, queryRadius);
-  std::cout << "sample point : "<< samplPoint << std::endl; 
 
   /* Orthogonal range entropy */
+  auto points = P;
+  std::cout << tree->size() << std::endl;
+  // std::cout << "No. of points: " <<  << " No. of colors: " << no_of_groups << std::endl; 
+  int currRadius;
+  double diff;
+  // std::cout << "Rad,Count,Canonical size,Calculated Ent,Actual Ent,Difference,Time for cal ent,Time for act ent" << std::endl;
+  if (outputFile.is_open()) {
+  for(j = 0; j < 5; ++j) {
+      int queryIdx = distribution(gen);
+      queryPoint = P[queryIdx];
+      std::cout<<j<<"\n";
+      for(i=0; i < 1; ++i) {
+          currRadius = 7;
+          outputFile << currRadius << ", ";
+          auto start = std::chrono::high_resolution_clock::now();
+          double calEntropy = pargeo::kdTree::orthogonalRangeEntropy(tree, queryPoint, currRadius, colorMap, no_of_colors);
+          auto end = std::chrono::high_resolution_clock::now();
+          std::chrono::duration<double> duration = end - start;
 
-  double e = pargeo::kdTree::orthogonalRangeEntropy(tree, queryPoint, queryRadius, treeMap);
-  std::cout << "Entropy e : "<< e << std::endl; 
+          auto start1 = std::chrono::high_resolution_clock::now();
+          double actualEntropy = pargeo::kdTree::rangeEntropyBruteForce(tree, queryPoint, currRadius, n);
+          auto end1 = std::chrono::high_resolution_clock::now();
+          std::chrono::duration<double> duration1 = end1 - start1;
+          outputFile<< calEntropy << ", "<< actualEntropy << ", " << calEntropy - actualEntropy << ", " << duration.count() << ", " << duration1.count() << std::endl;
+      }
+    }
+  }
   
   /* Delete all the trees */
   colorMap.clear();

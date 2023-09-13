@@ -1,5 +1,5 @@
 cd build
 cmake ..
-make -j rangeEntropyWrite
+make -j readData
 cd example
-./rangeEntropyWrite
+./readData
