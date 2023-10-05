@@ -29,6 +29,12 @@ target_link_libraries(rangeSearchSampling pargeoLib)
 add_executable(rangeEntropyTesting rangeEntropyTesting.cpp)
 target_link_libraries(rangeEntropyTesting pargeoLib)
 
+add_executable(rangeEntropyTesting2 rangeEntropyTesting2.cpp)
+target_link_libraries(rangeEntropyTesting2 pargeoLib)
+
+add_executable(getData getData.cpp)
+target_link_libraries(getData pargeoLib)
+
 add_executable(dynamicKdTreeKNN dynamicKdTreeKNN.cpp)
 target_link_libraries(dynamicKdTreeKNN pargeoLib)
 

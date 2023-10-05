@@ -1,5 +1,5 @@
 cd build
 cmake ..
-make -j readData
+make -j rangeEntropyTesting
 cd example
-./readData
+./rangeEntropyTesting

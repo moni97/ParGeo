@@ -475,30 +475,32 @@ namespace pargeo::kdTree
   /********** Orthogonal Range Entropy function **********/
 
   template <int dim, typename objT>
-  double orthogonalRangeEntropy(node<dim, objT> *tree,
+  double orthogonalRangeEntropyAdditive(node<dim, objT> *tree,
                     objT query,
                     double halfLen,
                     node<dim, objT> *treeMap[],
                     int n,
                     int &count,
-                    int &numCanNodes) 
+                    int &numCanNodes,
+                    double delta,
+                    int m) 
   {
     /* Parameters for the algorithm */
 
     int i;
     count = orthogonalRangeSearchCount(tree, query, halfLen);
-     
+    
     double d, x,
-      delta = 0.1,
-      tou = (delta / n) / (10 * log2(n / delta)),
-      m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
+      tou = (delta / n) / (10 * log2(n / delta));
+    m = (log(6) / (delta * delta)) * (log2(1 / tou) * log2(1 / tou));
     
     m = fmin(count, m);
-    m = m / 100;
-    double sum = 0.0,num;
-    
+    // m = m / 10;
+    double sum = 0.0, num;
+    // std::cout <<  delta << ", " << m << ", ";
+
     /* Generates m samples, calculate d(si) and x(si) */
-    int m2 = int(m);
+    // int m2 = int(m);
     std::unordered_map<int, int> numOfColorPtsInRange(n);
 
     parlay::sequence<parlay::sequence<objT *>> canonicalNodes = getCanonicalNodes(tree, query, halfLen, numCanNodes);
@@ -509,8 +511,7 @@ namespace pargeo::kdTree
     }
 
     parlay::sequence<objT *> sampleSeq = propotionalSampling(canonicalNodes, count, m);
- 
-    for (i = 0; i < m2; ++i) {
+    for (i = 0; i < m; ++i) {
       s = sampleSeq[i];
       num = numOfColorPtsInRange[s.attribute];
       d =  num / count;
@@ -522,6 +523,57 @@ namespace pargeo::kdTree
       sum += x;
     }
     return sum / m;
+  }
+
+  template <int dim, typename objT>
+  double orthogonalRangeEntropyMultiplicative(node<dim, objT> *tree,
+                    objT query,
+                    double halfLen,
+                    node<dim, objT> *treeMap[],
+                    int n,
+                    int &count,
+                    int &numCanNodes,
+                    double delta,
+                    bool isMul = false) 
+  {
+    /* Parameters for the algorithm */
+
+    int i;
+    count = orthogonalRangeSearchCount(tree, query, halfLen);
+    
+    double d, x,
+      m = log2(n) / (delta * delta); 
+    
+    // m = fmin(count, m);
+    // m = m / 100;
+    double sum = 0.0, num;
+    // std::cout << m << ", ";
+
+    /* Generates m samples, calculate d(si) and x(si) */
+    int m2 = int(m);
+    std::unordered_map<int, int> numOfColorPtsInRange(n);
+    // *numCanNodes = 0;
+    parlay::sequence<parlay::sequence<objT *>> canonicalNodes = getCanonicalNodes(tree, query, halfLen, numCanNodes);
+
+    objT s;
+    for(i =0; i< n; ++i) {
+      numOfColorPtsInRange[i] = orthogonalRangeSearchCount(treeMap[i], query, halfLen);
+    }
+
+    parlay::sequence<objT *> sampleSeq = propotionalSampling(canonicalNodes, count, m2);
+    for (i = 0; i < m2; ++i) {
+      s = sampleSeq[i];
+      num = numOfColorPtsInRange[s.attribute];
+      d = num / count;
+      x = 0;
+      if (d >= (double(1) / (n * n * n))) {
+        x = log2(double(1) / d) / (3 * log2(n));
+      }
+      sum += x;
+    }
+    double res = 3 * sum * (log2(n / double(m2)));
+    std::cout << delta << ", " << m << ", " << count << ", " << res << std::endl;
+    return res;
   }
 
   /********** Orthogonal Range Entropy Brute Force function **********/
